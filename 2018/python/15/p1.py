@@ -1,6 +1,5 @@
 import sys
 import math
-import time
 import os
 
 class CannotMoveError(Exception):
@@ -8,9 +7,7 @@ class CannotMoveError(Exception):
 
 
 class Unit:
-
     width = None 
-
     def __init__(self, location):
         self.loc = location
         self.alive = True
@@ -112,7 +109,6 @@ def main():
         os.system("clear")
         print(f"rounds={rounds}")
         print(ppgrid(grid, units=turn_units))
-        # print_grid(grid)
         with open(f"out.{rounds}", "w") as f:
             f.write(ppgrid(grid, units=turn_units))
 
@@ -123,7 +119,6 @@ def main():
                 continue
             targets = elves if isinstance(unit, Goblin) else goblins
             targets = [t for t in targets if t.alive]
-            # print(f"targets={targets}")
             if len(targets) == 0:
                 # combat ends
                 end = True
@@ -138,7 +133,6 @@ def main():
             ]
             if len(adj):
                 # attack
-                # print(f"{unit} attacks")
                 min_hp = sorted(adj, key=lambda t: t.hp)[0].hp
                 adj_min_hp = [t for t in adj if t.hp == min_hp]
                 target = adj_min_hp[0]
@@ -164,31 +158,20 @@ def main():
             target_paths = [p[1:] for p in find_path_between(unit, range_locs, grid)]
 
             if len(target_paths) == 0:
-                # print(f"Skipping, no paths")
                 continue
             
             sorted_paths = list(sorted(target_paths, key=lambda i: len(i)))
             min_len = len(sorted_paths[0])
             nearest_paths = [p for p in target_paths if len(p) == min_len]
-            # print(f"Shortest paths: {nearest_paths}")
             endpoints = list(sorted([p[-1] for p in nearest_paths], key=reading_order))
             chosen_endpoint = endpoints[0]
-            # print(f"First endpoint in reading order: {chosen_endpoint}")
             paths_to_endpoint = [p for p in nearest_paths if p[-1] == chosen_endpoint]
-            # print(f"Paths to chosen endpoint: {paths_to_endpoint}")
             first_steps = [p[0] for p in paths_to_endpoint]
             first_steps_sorted = list(sorted(first_steps, key=reading_order))
             first_step = first_steps_sorted[0]
-            # print(f"Chosen path by reading order of first step: {first_step}")
-            # reading_order_paths = list(sorted(nearest_paths, key=lambda i: reading_order(i[-1])))
-            # print(f"Reading order paths: {reading_order_paths}")
-            # chosen_path = reading_order_paths[0]
-            # print(f"chosen_path={chosen_path}")
             
             # unit should move
             unit.move_to(first_step, grid)
-            # os.system("clear")
-            # print_grid(grid)
             
             # attack after move
             x, y = unit.loc
@@ -212,8 +195,6 @@ def main():
 
         if len(turn_units) <= 1:
             break
-        # print(f"round={rounds}")
-        # time.sleep(2)
     print(f"Combat ended in round {rounds}")
     shp = sum([u.hp for u in units() if u.alive])
     print(f"Sum of remaining units = {shp}")
@@ -227,13 +208,27 @@ def adjacent_nodes(x, y):
         (x - 1, y),
     ]
 
+def adjs(pos):
+    y, x = pos
+    return [(y - 1, x), (y, x - 1), (y, x + 1), (y + 1, x)]
+
+from queue import PriorityQueue
+
+def nearest(start, goals, excludes):
+    visited = set(excludes)
+    queue = PriorityQueue()
+    queue.put(start)
+    while not queue.empty():
+        item = queue.get()
+        if item in goals:
+            # found nearest
+            return
+        [queue.put(i) for i in adjs(item)]
+        
+
 def find_path_between(unit, tlocs, grid):
     if len(tlocs) == 0:
         return []
-    now = time.time()
-    # print(f"Starting dijkstra")
-    # print_grid(grid)
-    # time.sleep(3)
     ngrid = [[math.inf if x == "." else -math.inf for x in row] for row in grid]
     ngrid[unit.loc[1]][unit.loc[0]] = 0
     for tloc in tlocs:
@@ -244,8 +239,6 @@ def find_path_between(unit, tlocs, grid):
 
     current = unit.loc
     while len(nodes):
-        #print(current)
-        #print(target.loc)
         adjacent = adjacent_nodes(*current)
         for adj in adjacent:
             x, y = adj
@@ -260,31 +253,15 @@ def find_path_between(unit, tlocs, grid):
         nodes.remove(current)
         if len(nodes) == 0:
             break
-            # raise RuntimeError("no path to target")
 
         # select new current
         remaining = [(n, (x, y)) for y, row in enumerate(ngrid) for x, n in enumerate(row) if (x, y) in nodes]
         remaining_min = sorted(remaining, key=lambda n: n[0])[0]
-        #print(f"remaining_min={remaining_min}")
         if remaining_min[0] == math.inf:
-            # print(f"remaining is inf")
             break
         current = remaining_min[1]
  
-#        if current in set_tlocs:
-#            # found a path
-#            path = []
-#            nextnode = current
-#            while nextnode != unit.loc:
-#                path.append(nextnode)
-#                adj = [(ngrid[y][x], (x,y)) for x,y in adjacent_nodes(*nextnode) if ngrid[y][x] != -math.inf]
-#                adj_min = sorted(adj, key=lambda n: n[0])[0]
-#                nextnode = adj_min[1]
-#            paths.append(list(reversed(path)))
-    # print("completed while loop")
     paths = []
-    # print(f"Checking paths for {unit}@{unit.loc}")
-    # print(f"Target locations: {set_tlocs}")
     min_len = sorted([(ngrid[y][x], (x,y)) for x, y in set_tlocs], key=lambda p: p[0])[0][0]
     if min_len == math.inf:
         return []
@@ -293,13 +270,8 @@ def find_path_between(unit, tlocs, grid):
         value = ngrid[y][x]
         if value == math.inf or value == -math.inf:
             # unreachable
-            # print(f"Unreachable: {x},{y}")
             continue
         paths.extend(paths_from_loc(ngrid, (x, y), unit.loc))
-
-    end = time.time()
-    rt = end - now
-    # print(f"dijkstra's <{unit}> completed in: {rt:2.3f} seconds")
     return paths
 
 def paths_from_loc(ngrid, loc, start_loc):
